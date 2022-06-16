@@ -25,6 +25,7 @@ import (
 )
 
 func (r *Release) SetupWebhookWithManager(mgr ctrl.Manager) error {
+	r.GetLabels()
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(r).
 		Complete()
