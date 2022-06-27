@@ -98,6 +98,12 @@ jobs:
             git --no-pager diff ':(exclude)bin/kustomize' ':(exclude)bin/controller-gen'
             exit 1
           fi
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: ./...
+        env:
+          GOROOT: ""
       - name: Run Go Tests
         run: make test
       - name: Upload coverage to Codecov
