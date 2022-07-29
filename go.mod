@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/go-logr/logr v1.2.2
+	github.com/kcp-dev/logicalcluster v1.1.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/operator-framework/operator-lib v0.10.0
@@ -19,7 +20,7 @@ require (
 
 require (
 	github.com/kcp-dev/apimachinery v0.0.0-20220621200107-3d03cbbc3770 // indirect
-	github.com/kcp-dev/logicalcluster v1.0.0 // indirect
+	github.com/kcp-dev/kcp/pkg/apis v0.6.3 // indirect
 )
 
 require (
