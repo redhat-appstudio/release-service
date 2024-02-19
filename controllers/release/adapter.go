@@ -19,9 +19,9 @@ package release
 import (
 	"context"
 	"fmt"
-	"os"
-
 	"github.com/redhat-appstudio/operator-toolkit/controller"
+	"os"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/redhat-appstudio/release-service/api/v1alpha1"
@@ -249,6 +249,22 @@ func (a *adapter) EnsureReleaseIsRunning() (controller.OperationResult, error) {
 func (a *adapter) EnsureReleaseIsProcessed() (controller.OperationResult, error) {
 	if a.release.HasProcessingFinished() {
 		return controller.ContinueProcessing()
+	}
+
+	pipelineRuns, err := a.loader.GetActiveManagedReleasePipelineRuns(a.ctx, a.client, a.release)
+	if err != nil {
+		return controller.RequeueWithError(err)
+	}
+
+	// Requeue de Release if other PipelineRun is running for the same Application
+	if len(pipelineRuns.Items) > 0 {
+		patch := client.MergeFrom(a.release.DeepCopy())
+		a.release.MarkReleaseQueued(fmt.Sprintf("%d Release(s) running for the same Application", len(pipelineRuns.Items)))
+		err := a.client.Status().Patch(a.ctx, a.release, patch)
+		if err != nil {
+			return controller.RequeueWithError(err)
+		}
+		return controller.RequeueAfter(time.Minute, nil)
 	}
 
 	pipelineRun, err := a.loader.GetManagedReleasePipelineRun(a.ctx, a.client, a.release)
