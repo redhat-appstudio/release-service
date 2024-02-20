@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	tektonutils "github.com/redhat-appstudio/release-service/tekton/utils"
 
@@ -538,6 +539,17 @@ var _ = Describe("Release adapter", Ordered, func() {
 			Expect(adapter.release.IsReleasing()).To(BeTrue())
 		})
 
+		It("should mark the Release as releasing even if it is queued", func() {
+			adapter.release.MarkReleasing("")
+			adapter.release.MarkReleaseQueued("")
+			Expect(adapter.release.IsReleaseQueued()).To(BeTrue())
+			Expect(adapter.release.IsReleasing()).To(BeFalse())
+			result, err := adapter.EnsureReleaseIsRunning()
+			Expect(!result.RequeueRequest && !result.CancelRequest).To(BeTrue())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(adapter.release.IsReleasing()).To(BeTrue())
+		})
+
 		It("should do nothing if the release is already running", func() {
 			adapter.release.MarkReleasing("")
 
@@ -586,6 +598,33 @@ var _ = Describe("Release adapter", Ordered, func() {
 			result, err := adapter.EnsureReleaseIsProcessed()
 			Expect(!result.RequeueRequest && !result.CancelRequest).To(BeTrue())
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should queue the Release if another PipelineRun is running for the same Application", func() {
+			adapter.ctx = toolkit.GetMockedContext(ctx, []toolkit.MockData{
+				{
+					ContextKey: loader.ActiveManagedReleasePipelineRunsContextKey,
+					Resource: &tektonv1.PipelineRunList{
+						Items: []tektonv1.PipelineRun{
+							{
+								ObjectMeta: metav1.ObjectMeta{
+									Name:      "pipeline-run",
+									Namespace: "default",
+								},
+							},
+						},
+					},
+				},
+			})
+
+			adapter.release.MarkReleasing("")
+			result, err := adapter.EnsureReleaseIsProcessed()
+			Expect(result.RequeueRequest && !result.CancelRequest).To(BeTrue())
+			Expect(result.RequeueDelay).To(Equal(time.Minute))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(adapter.release.IsProcessing()).To(BeFalse())
+			Expect(adapter.release.IsReleaseQueued()).To(BeTrue())
+
 		})
 
 		It("should register the processing data if the PipelineRun already exists", func() {
