@@ -30,6 +30,7 @@ type ObjectLoader interface {
 	GetMatchingReleasePlanAdmission(ctx context.Context, cli client.Client, releasePlan *v1alpha1.ReleasePlan) (*v1alpha1.ReleasePlanAdmission, error)
 	GetMatchingReleasePlans(ctx context.Context, cli client.Client, releasePlanAdmission *v1alpha1.ReleasePlanAdmission) (*v1alpha1.ReleasePlanList, error)
 	GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error)
+	GetPreviousRelease(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.Release, error)
 	GetRoleBindingFromReleaseStatus(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*rbac.RoleBinding, error)
 	GetReleasePipelineRun(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*tektonv1.PipelineRun, error)
 	GetReleasePlan(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.ReleasePlan, error)
@@ -175,6 +176,36 @@ func (l *loader) GetMatchingReleasePlans(ctx context.Context, cli client.Client,
 func (l *loader) GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error) {
 	release := &v1alpha1.Release{}
 	return release, toolkit.GetObject(name, namespace, cli, ctx, release)
+}
+
+// GetPreviousRelease returns the Release that was created just before the given Release.
+// If no previous Release is found, it returns a NotFound error.
+func (l *loader) GetPreviousRelease(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.Release, error) {
+	releases := &v1alpha1.ReleaseList{}
+	err := cli.List(ctx, releases, client.InNamespace(release.Namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	var previousRelease *v1alpha1.Release
+	releaseTime := release.CreationTimestamp.Time
+
+	for i := range releases.Items {
+		if releases.Items[i].Name == release.Name {
+			continue
+		}
+		if releases.Items[i].CreationTimestamp.Time.Before(releaseTime) {
+			if previousRelease == nil || releases.Items[i].CreationTimestamp.Time.After(previousRelease.CreationTimestamp.Time) {
+				previousRelease = &releases.Items[i]
+			}
+		}
+	}
+
+	if previousRelease == nil {
+		return nil, fmt.Errorf("no previous release found for release '%s'", release.Name)
+	}
+
+	return previousRelease, nil
 }
 
 // GetRoleBindingFromReleaseStatus returns the RoleBinding associated with the given Release. That association is defined

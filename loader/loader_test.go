@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	tektonutils "github.com/konflux-ci/release-service/tekton/utils"
 
@@ -244,6 +245,78 @@ var _ = Describe("Release Adapter", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(returnedObject).NotTo(Equal(&v1alpha1.Release{}))
 			Expect(returnedObject.Name).To(Equal(release.Name))
+		})
+	})
+
+	When("calling GetPreviousRelease", func() {
+		var release1, release2, release3 *v1alpha1.Release
+
+		BeforeEach(func() {
+			now := time.Now()
+
+			release1 = &v1alpha1.Release{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "release1",
+					Namespace:         "default",
+					CreationTimestamp: metav1.Time{Time: now.Add(-3 * time.Hour)},
+				},
+				Spec: v1alpha1.ReleaseSpec{
+					ReleasePlan: "release-plan-1",
+					Snapshot:    "snapshot-1",
+				},
+			}
+			release2 = &v1alpha1.Release{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "release2",
+					Namespace:         "default",
+					CreationTimestamp: metav1.Time{Time: now.Add(-2 * time.Hour)},
+				},
+				Spec: v1alpha1.ReleaseSpec{
+					ReleasePlan: "release-plan-2",
+					Snapshot:    "snapshot-2",
+				},
+			}
+			release3 = &v1alpha1.Release{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "release3",
+					Namespace:         "default",
+					CreationTimestamp: metav1.Time{Time: now.Add(-1 * time.Hour)},
+				},
+				Spec: v1alpha1.ReleaseSpec{
+					ReleasePlan: "release-plan-3",
+					Snapshot:    "snapshot-3",
+				},
+			}
+
+			Expect(k8sClient.Create(ctx, release1)).To(Succeed())
+			Expect(k8sClient.Create(ctx, release2)).To(Succeed())
+			Expect(k8sClient.Create(ctx, release3)).To(Succeed())
+		})
+
+		AfterEach(func() {
+			Expect(k8sClient.Delete(ctx, release1)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, release2)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, release3)).To(Succeed())
+		})
+
+		It("returns the previous release if it exists", func() {
+			returnedObject, err := loader.GetPreviousRelease(ctx, k8sClient, release3)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(returnedObject).NotTo(BeNil())
+			Expect(returnedObject.Name).To(Equal(release2.Name))
+		})
+
+		It("returns a NotFound error if there is no previous release", func() {
+			_, err := loader.GetPreviousRelease(ctx, k8sClient, release1)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no previous release found"))
+		})
+
+		It("returns the correct previous release in the case of multiple releases", func() {
+			returnedObject, err := loader.GetPreviousRelease(ctx, k8sClient, release2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(returnedObject).NotTo(BeNil())
+			Expect(returnedObject.Name).To(Equal(release1.Name))
 		})
 	})
 
