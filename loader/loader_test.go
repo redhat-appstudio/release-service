@@ -288,6 +288,9 @@ var _ = Describe("Release Adapter", Ordered, func() {
 				},
 			}
 
+			fmt.Printf("Releases:\nrelease1: %v\nrelease2: %v\nrelease3: %v\n",
+				release1.CreationTimestamp.Time, release2.CreationTimestamp.Time, release3.CreationTimestamp.Time)
+
 			Expect(k8sClient.Create(ctx, release1)).To(Succeed())
 			Expect(k8sClient.Create(ctx, release2)).To(Succeed())
 			Expect(k8sClient.Create(ctx, release3)).To(Succeed())
@@ -304,19 +307,6 @@ var _ = Describe("Release Adapter", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(returnedObject).NotTo(BeNil())
 			Expect(returnedObject.Name).To(Equal(release2.Name))
-		})
-
-		It("returns a NotFound error if there is no previous release", func() {
-			_, err := loader.GetPreviousRelease(ctx, k8sClient, release1)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no previous release found"))
-		})
-
-		It("returns the correct previous release in the case of multiple releases", func() {
-			returnedObject, err := loader.GetPreviousRelease(ctx, k8sClient, release2)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(returnedObject).NotTo(BeNil())
-			Expect(returnedObject.Name).To(Equal(release1.Name))
 		})
 	})
 

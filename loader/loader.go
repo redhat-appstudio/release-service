@@ -190,7 +190,10 @@ func (l *loader) GetPreviousRelease(ctx context.Context, cli client.Client, rele
 	var previousRelease *v1alpha1.Release
 	releaseTime := release.CreationTimestamp.Time
 
+	fmt.Printf("Current release: %s, Timestamp: %v\n", release.Name, releaseTime)
+
 	for i := range releases.Items {
+		fmt.Printf("Evaluating release: %s, Timestamp: %v\n", releases.Items[i].Name, releases.Items[i].CreationTimestamp.Time)
 		if releases.Items[i].Name == release.Name {
 			continue
 		}
