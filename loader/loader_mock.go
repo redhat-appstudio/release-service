@@ -22,8 +22,8 @@ const (
 	MatchedReleasePlansContextKey
 	MatchedReleasePlanAdmissionContextKey
 	ProcessingResourcesContextKey
-	ReleaseContextKey
 	PreviousReleaseContextKey
+	ReleaseContextKey
 	ReleasePipelineRunContextKey
 	ReleasePlanAdmissionContextKey
 	ReleasePlanContextKey

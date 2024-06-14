@@ -17,6 +17,8 @@ import (
 	tektonv1 "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbac "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -29,8 +31,8 @@ type ObjectLoader interface {
 	GetEnterpriseContractPolicy(ctx context.Context, cli client.Client, releasePlanAdmission *v1alpha1.ReleasePlanAdmission) (*ecapiv1alpha1.EnterpriseContractPolicy, error)
 	GetMatchingReleasePlanAdmission(ctx context.Context, cli client.Client, releasePlan *v1alpha1.ReleasePlan) (*v1alpha1.ReleasePlanAdmission, error)
 	GetMatchingReleasePlans(ctx context.Context, cli client.Client, releasePlanAdmission *v1alpha1.ReleasePlanAdmission) (*v1alpha1.ReleasePlanList, error)
-	GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error)
 	GetPreviousRelease(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.Release, error)
+	GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error)
 	GetRoleBindingFromReleaseStatus(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*rbac.RoleBinding, error)
 	GetReleasePipelineRun(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*tektonv1.PipelineRun, error)
 	GetReleasePlan(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.ReleasePlan, error)
@@ -171,13 +173,6 @@ func (l *loader) GetMatchingReleasePlans(ctx context.Context, cli client.Client,
 	return releasePlans, nil
 }
 
-// GetRelease returns the Release with the given name and namespace. If the Release is not found or the Get operation
-// fails, an error will be returned.
-func (l *loader) GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error) {
-	release := &v1alpha1.Release{}
-	return release, toolkit.GetObject(name, namespace, cli, ctx, release)
-}
-
 // GetPreviousRelease returns the Release that was created just before the given Release.
 // If no previous Release is found, it returns a NotFound error.
 func (l *loader) GetPreviousRelease(ctx context.Context, cli client.Client, release *v1alpha1.Release) (*v1alpha1.Release, error) {
@@ -190,25 +185,26 @@ func (l *loader) GetPreviousRelease(ctx context.Context, cli client.Client, rele
 	var previousRelease *v1alpha1.Release
 	releaseTime := release.CreationTimestamp.Time
 
-	fmt.Printf("Current release: %s, Timestamp: %v\n", release.Name, releaseTime)
-
-	for i := range releases.Items {
-		fmt.Printf("Evaluating release: %s, Timestamp: %v\n", releases.Items[i].Name, releases.Items[i].CreationTimestamp.Time)
-		if releases.Items[i].Name == release.Name {
-			continue
-		}
-		if releases.Items[i].CreationTimestamp.Time.Before(releaseTime) {
-			if previousRelease == nil || releases.Items[i].CreationTimestamp.Time.After(previousRelease.CreationTimestamp.Time) {
+	for i, currentRelease := range releases.Items {
+		if currentRelease.Name != release.Name && currentRelease.CreationTimestamp.Time.Before(releaseTime) {
+			if previousRelease == nil || currentRelease.CreationTimestamp.Time.After(previousRelease.CreationTimestamp.Time) {
 				previousRelease = &releases.Items[i]
 			}
 		}
 	}
 
 	if previousRelease == nil {
-		return nil, fmt.Errorf("no previous release found for release '%s'", release.Name)
+		return nil, errors.NewNotFound(schema.GroupResource{Group: "release.konflux-ci", Resource: "Release"}, release.Name)
 	}
 
 	return previousRelease, nil
+}
+
+// GetRelease returns the Release with the given name and namespace. If the Release is not found or the Get operation
+// fails, an error will be returned.
+func (l *loader) GetRelease(ctx context.Context, cli client.Client, name, namespace string) (*v1alpha1.Release, error) {
+	release := &v1alpha1.Release{}
+	return release, toolkit.GetObject(name, namespace, cli, ctx, release)
 }
 
 // GetRoleBindingFromReleaseStatus returns the RoleBinding associated with the given Release. That association is defined
